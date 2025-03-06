@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tourist Places Near Me</title>
+    
+    <!-- Dependencies -->
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/axios@1.6.7/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <style>
+        /* Global styles */
+        :root {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+
+        /* Map styles */
+        .map-container {
+            width: 100%;
+            height: 70vh;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        /* Error message styles */
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #c62828;
+        }
+
+        /* Place list styles */
+        .place-list {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .place-item {
+            padding: 15px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .place-item:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+
+        .place-item.selected {
+            background: #e8f5e9;
+            border-left-color: #4CAF50;
+        }
+
+        .place-item h3 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        .place-item p {
+            margin: 4px 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Selected place styles */
+        .selected-place {
+            margin: 20px 0;
+            padding: 20px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .selected-place h2 {
+            margin: 0 0 10px 0;
+            color: #2e7d32;
+        }
+
+        .selected-place p {
+            margin: 8px 0;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .selected-place a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .selected-place a:hover {
+            background: #388e3c;
+            transform: translateY(-2px);
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 16px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .map-container {
+                height: 50vh;
+            }
+
+            .place-list {
+                max-height: 40vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // API key should be in environment variable in production
+        const GEOAPIFY_API_KEY = '49f54774eecb471b98f1afec04a2df6a';
+
+        // Error boundary component
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="error-message">
+                            <h2>Something went wrong</h2>
+                            <p>Please try refreshing the page. If the problem persists, check your internet connection.</p>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // Map Component
+        const Map = ({ center, markers = [], zoom = 13, onMarkerClick }) => {
+            const mapContainer = React.useRef(null);
+            const mapInstance = React.useRef(null);
+            const [error, setError] = React.useState(null);
+
+            React.useEffect(() => {
+                if (!mapContainer.current || !center) return;
+
+                try {
+                    const map = new maplibregl.Map({
+                        container: mapContainer.current,
+                        style: {
+                            version: 8,
+                            sources: {
+                                'raster-tiles': {
+                                    type: 'raster',
+                                    tiles: [`https://maps.geoapify.com/v1/tile/carto/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`],
+                                    tileSize: 256,
+                                }
+                            },
+                            layers: [{
+                                id: 'raster-tiles',
+                                type: 'raster',
+                                source: 'raster-tiles',
+                                minzoom: 0,
+                                maxzoom: 20
+                            }]
+                        },
+                        center: center,
+                        zoom: zoom
+                    });
+
+                    mapInstance.current = map;
+
+                    map.on('load', () => {
+                        // Add user location marker
+                        new maplibregl.Marker({ color: '#FF0000' })
+                            .setLngLat(center)
+                            .setPopup(new maplibregl.Popup().setHTML('<strong>Your Location</strong>'))
+                            .addTo(map);
+
+                        // Add place markers
+                        markers.forEach((marker, index) => {
+                            const markerElement = new maplibregl.Marker({ color: '#4CAF50' })
+                                .setLngLat(marker.position)
+                                .setPopup(new maplibregl.Popup().setHTML(`<strong>${marker.title}</strong>`))
+                                .addTo(map);
+
+                            markerElement.getElement().addEventListener('click', () => {
+                                onMarkerClick(index);
+                            });
+                        });
+                    });
+
+                    return () => map.remove();
+                } catch (err) {
+                    setError(err.message);
+                }
+            }, [center, markers, zoom, onMarkerClick]);
+
+            if (error) {
+                return <div className="error-message">Error loading map: {error}</div>;
+            }
+
+            return <div ref={mapContainer} className="map-container" />;
+        };
+
+        // App Component
+        const App = () => {
+            const [userLocation, setUserLocation] = React.useState(null);
+            const [places, setPlaces] = React.useState([]);
+            const [selectedPlace, setSelectedPlace] = React.useState(null);
+            const [error, setError] = React.useState(null);
+            const [loading, setLoading] = React.useState(true);
+
+            React.useEffect(() => {
+                const fetchPlaces = async (position) => {
+                    try {
+                        const { latitude, longitude } = position.coords;
+                        setUserLocation([longitude, latitude]);
+
+                        const bbox = [
+                            longitude - 0.1,
+                            latitude - 0.1,
+                            longitude + 0.1,
+                            latitude + 0.1
+                        ];
+
+                        const response = await axios.get(
+                            `https://api.geoapify.com/v2/places`,
+                            {
+                                params: {
+                                    categories: 'tourism.sights',
+                                    filter: `rect:${bbox.join(',')}`,
+                                    limit: 20,
+                                    apiKey: GEOAPIFY_API_KEY
+                                }
+                            }
+                        );
+
+                        const touristPlaces = response.data.features.map(feature => ({
+                            name: feature.properties.name,
+                            location: {
+                                lat: feature.properties.lat,
+                                lon: feature.properties.lon,
+                                formatted: feature.properties.formatted
+                            },
+                            description: feature.properties.description,
+                            categories: feature.properties.categories,
+                            website: feature.properties.website,
+                            distance: feature.properties.distance
+                        }));
+
+                        setPlaces(touristPlaces);
+                        setError(null);
+                    } catch (err) {
+                        setError('Error fetching places. Please check your internet connection and try again.');
+                        console.error('Error fetching places:', err);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                const handleLocationError = (err) => {
+                    setError('Please enable location services to use this app.');
+                    setLoading(false);
+                    console.error('Geolocation error:', err);
+                };
+
+                navigator.geolocation.getCurrentPosition(fetchPlaces, handleLocationError, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            }, []);
+
+            if (loading) {
+                return (
+                    <div className="loading">
+                        <div className="loading-spinner"></div>
+                        <p>Loading nearby places...</p>
+                    </div>
+                );
+            }
+
+            if (error) {
+                return <div className="error-message">{error}</div>;
+            }
+
+            if (!userLocation) {
+                return (
+                    <div className="error-message">
+                        <p>Unable to get your location. Please enable location services and refresh the page.</p>
+                    </div>
+                );
+            }
+
+            const markers = places.map(place => ({
+                position: [place.location.lon, place.location.lat],
+                title: place.name
+            }));
+
+            return (
+                <div>
+                    <h1>Nearby Tourist Places</h1>
+                    <ErrorBoundary>
+                        <Map 
+                            center={userLocation} 
+                            markers={markers} 
+                            zoom={13}
+                            onMarkerClick={(index) => setSelectedPlace(places[index])}
+                        />
+                    </ErrorBoundary>
+                    {selectedPlace && (
+                        <div className="selected-place">
+                            <h2>{selectedPlace.name}</h2>
+                            <p>{selectedPlace.location.formatted}</p>
+                            {selectedPlace.description && <p>{selectedPlace.description}</p>}
+                            {selectedPlace.website && (
+                                <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer">
+                                    Visit Website
+                                </a>
+                            )}
+                        </div>
+                    )}
+                    <div className="place-list">
+                        {places.length === 0 ? (
+                            <p>No tourist places found nearby. Try expanding your search area.</p>
+                        ) : (
+                            places.map((place, index) => (
+                                <div 
+                                    key={index} 
+                                    className={`place-item ${selectedPlace?.name === place.name ? 'selected' : ''}`}
+                                    onClick={() => setSelectedPlace(place)}
+                                >
+                                    <h3>{place.name}</h3>
+                                    <p>{place.location.formatted}</p>
+                                    <p>Distance: {place.distance ? `${(place.distance / 1000).toFixed(1)} km` : 'N/A'}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.createRoot(document.getElementById('root')).render(
+            <React.StrictMode>
+                <ErrorBoundary>
+                    <App />
+                </ErrorBoundary>
+            </React.StrictMode>
+        );
+    </script>
+
+    <!-- Babel for JSX support -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</body>
+</html> 

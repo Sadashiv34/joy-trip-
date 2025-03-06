@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nearby Tourist Places</title>
+    
+    <!-- Load React -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Load Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Load Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <!-- Load MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .map-container {
+            width: 100%;
+            height: 70vh;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .place-list {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .place-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .place-item:hover {
+            background: #f0f0f0;
+            transform: translateX(5px);
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        .close-button:hover {
+            color: #000;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .modal-content p {
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        .place-details {
+            margin-top: 15px;
+        }
+        .place-details img {
+            width: 100%;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        /* Add new styles for routing */
+        .route-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        .route-button:hover {
+            background: #45a049;
+        }
+        .route-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .route-info ul {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        .route-info li {
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .place-header {
+            margin-bottom: 20px;
+        }
+        .place-address {
+            font-size: 14px;
+            color: #666;
+        }
+        .distance {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .place-actions {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .website-button {
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .website-button:hover {
+            text-decoration: underline;
+        }
+        .route-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .route-detail {
+            display: flex;
+            align-items: center;
+        }
+        .route-steps {
+            margin-top: 10px;
+        }
+        .step-instruction {
+            font-weight: bold;
+        }
+        .step-distance {
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const GEOAPIFY_API_KEY = '49f54774eecb471b98f1afec04a2df6a';
+        const OPENROUTE_API_KEY = '5b3ce3597851110001cf6248e4f4c6dbb67643618f75f696862f62a9';
+
+        // Route Service
+        const RouteService = {
+            async getRoute(start, end) {
+                try {
+                    const response = await axios.get(
+                        `https://api.openrouteservice.org/v2/directions/driving-car` +
+                        `?api_key=${OPENROUTE_API_KEY}` +
+                        `&start=${start[0]},${start[1]}` +  // longitude,latitude
+                        `&end=${end[0]},${end[1]}`
+                    );
+
+                    // Transform response to match our expected format
+                    const route = response.data;
+                    return {
+                        features: [{
+                            properties: {
+                                segments: route.features[0].properties.segments
+                            },
+                            geometry: route.features[0].geometry
+                        }]
+                    };
+                } catch (error) {
+                    console.error('Error fetching route:', error);
+                    throw new Error('Unable to fetch route: ' + (error.response?.data?.message || error.message));
+                }
+            }
+        };
+
+        // Modal Component with Route Information
+        const Modal = ({ place, onClose, userLocation }) => {
+            const [routeInfo, setRouteInfo] = React.useState(null);
+            const [loading, setLoading] = React.useState(false);
+
+            const getDirections = async () => {
+                try {
+                    setLoading(true);
+                    const route = await RouteService.getRoute(
+                        userLocation,
+                        [place.location.lon, place.location.lat]
+                    );
+                    
+                    if (route?.features?.[0]?.properties?.segments?.[0]) {
+                        setRouteInfo(route.features[0].properties.segments[0]);
+                    } else {
+                        throw new Error('Invalid route response format');
+                    }
+                } catch (error) {
+                    console.error('Error getting directions:', error);
+                    alert(error.message || 'Unable to fetch directions. Please try again later.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (!place) return null;
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="close-button" onClick={onClose}>&times;</button>
+                        <div className="place-header">
+                            <h2>{place.name}</h2>
+                            <div className="place-address">
+                                {place.location.formatted}
+                                <div className="distance">
+                                    Distance: {place.distance ? `${(place.distance / 1000).toFixed(1)} km` : 'NaN km'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="place-actions">
+                            <button 
+                                className="route-button" 
+                                onClick={getDirections}
+                                disabled={loading}
+                            >
+                                <i className="fas fa-directions"></i>
+                                {loading ? 'Getting Directions...' : 'Get Directions'}
+                            </button>
+                            {place.website && (
+                                <a 
+                                    href={place.website} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="website-button"
+                                >
+                                    <i className="fas fa-globe"></i>
+                                    Visit Website
+                                </a>
+                            )}
+                        </div>
+
+                        {routeInfo && (
+                            <div className="route-info">
+                                <div className="route-summary">
+                                    <div className="route-detail">
+                                        <i className="fas fa-road"></i>
+                                        <span>{(routeInfo.distance / 1000).toFixed(1)} km</span>
+                                    </div>
+                                    <div className="route-detail">
+                                        <i className="fas fa-clock"></i>
+                                        <span>{Math.round(routeInfo.duration / 60)} mins</span>
+                                    </div>
+                                </div>
+                                {routeInfo.steps && (
+                                    <div className="route-steps">
+                                        <h4>Directions:</h4>
+                                        <ul>
+                                            {routeInfo.steps.map((step, index) => (
+                                                <li key={index}>
+                                                    <span className="step-instruction">{step.instruction}</span>
+                                                    {step.distance && (
+                                                        <span className="step-distance">
+                                                            {(step.distance / 1000).toFixed(1)} km
+                                                        </span>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Map Component with Route Display
+        const Map = ({ center, markers = [], zoom = 13, onMarkerClick, routeGeometry = null }) => {
+            const mapContainer = React.useRef(null);
+            const mapInstance = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!mapContainer.current || !center) return;
+
+                const map = new maplibregl.Map({
+                    container: mapContainer.current,
+                    style: {
+                        version: 8,
+                        sources: {
+                            'raster-tiles': {
+                                type: 'raster',
+                                tiles: [`https://maps.geoapify.com/v1/tile/carto/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`],
+                                tileSize: 256,
+                            }
+                        },
+                        layers: [{
+                            id: 'raster-tiles',
+                            type: 'raster',
+                            source: 'raster-tiles',
+                            minzoom: 0,
+                            maxzoom: 20
+                        }]
+                    },
+                    center: center,
+                    zoom: zoom
+                });
+
+                mapInstance.current = map;
+
+                // Add user location marker
+                new maplibregl.Marker({ color: '#FF0000' })
+                    .setLngLat(center)
+                    .setPopup(new maplibregl.Popup().setHTML('Your Location'))
+                    .addTo(map);
+
+                // Add place markers
+                markers.forEach((marker, index) => {
+                    const markerElement = new maplibregl.Marker({ color: '#4CAF50' })
+                        .setLngLat(marker.position)
+                        .setPopup(new maplibregl.Popup().setHTML(marker.title))
+                        .addTo(map);
+
+                    markerElement.getElement().addEventListener('click', () => {
+                        onMarkerClick(index);
+                    });
+                });
+
+                if (routeGeometry) {
+                    // Add route layer if route exists
+                    mapInstance.current.addLayer({
+                        id: 'route',
+                        type: 'line',
+                        source: {
+                            type: 'geojson',
+                            data: {
+                                type: 'Feature',
+                                properties: {},
+                                geometry: routeGeometry
+                            }
+                        },
+                        layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                        },
+                        paint: {
+                            'line-color': '#4CAF50',
+                            'line-width': 4
+                        }
+                    });
+                }
+
+                return () => map.remove();
+            }, [center, markers, zoom, onMarkerClick, routeGeometry]);
+
+            React.useEffect(() => {
+                if (!mapInstance.current || !routeGeometry) return;
+
+                // Add route layer if route exists
+                mapInstance.current.addLayer({
+                    id: 'route',
+                    type: 'line',
+                    source: {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            properties: {},
+                            geometry: routeGeometry
+                        }
+                    },
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-color': '#4CAF50',
+                        'line-width': 4
+                    }
+                });
+
+                return () => {
+                    if (mapInstance.current.getLayer('route')) {
+                        mapInstance.current.removeLayer('route');
+                        mapInstance.current.removeSource('route');
+                    }
+                };
+            }, [routeGeometry]);
+
+            return <div ref={mapContainer} className="map-container" />;
+        };
+
+        // NearbyPlaces Component
+        const NearbyPlaces = () => {
+            const [userLocation, setUserLocation] = React.useState(null);
+            const [places, setPlaces] = React.useState([]);
+            const [selectedPlace, setSelectedPlace] = React.useState(null);
+
+            React.useEffect(() => {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setUserLocation([longitude, latitude]);
+
+                    const bbox = [
+                        longitude - 0.1,
+                        latitude - 0.1,
+                        longitude + 0.1,
+                        latitude + 0.1
+                    ];
+
+                    const response = await axios.get(
+                        `https://api.geoapify.com/v2/places?categories=tourism.sights&filter=rect:${bbox.join(',')}&limit=20&apiKey=${GEOAPIFY_API_KEY}`
+                    );
+
+                    const touristPlaces = response.data.features.map(feature => ({
+                        name: feature.properties.name,
+                        location: {
+                            lat: feature.properties.lat,
+                            lon: feature.properties.lon,
+                            formatted: feature.properties.formatted
+                        },
+                        description: feature.properties.description,
+                        categories: feature.properties.categories,
+                        website: feature.properties.website,
+                        distance: feature.properties.distance
+                    }));
+
+                    setPlaces(touristPlaces);
+                });
+            }, []);
+
+            if (!userLocation) return null;
+
+            const markers = places.map(place => ({
+                position: [place.location.lon, place.location.lat],
+                title: place.name
+            }));
+
+            return (
+                <div>
+                    <Map 
+                        center={userLocation} 
+                        markers={markers} 
+                        zoom={13}
+                        onMarkerClick={(index) => setSelectedPlace(places[index])}
+                    />
+                    {selectedPlace && (
+                        <Modal 
+                            place={selectedPlace} 
+                            onClose={() => setSelectedPlace(null)}
+                            userLocation={userLocation}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.createRoot(document.getElementById('root')).render(<NearbyPlaces />);
+    </script>
+</body>
+</html> 
