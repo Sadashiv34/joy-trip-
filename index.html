@@ -1,17 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DEGELT25T1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-DEGELT25T1');
-</script>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tourist Places Near Me</title>
@@ -736,6 +725,34 @@
                     {showFeedback && (
                         <FeedbackForm onClose={() => setShowFeedback(false)} />
                     )}
+
+                    {/* Feedback Button */}
+                    <div style={{ 
+                        position: 'fixed', 
+                        bottom: '20px', 
+                        right: '20px', 
+                        zIndex: 1000 
+                    }}>
+                        <a 
+                            href="https://docs.google.com/forms/d/e/1FAIpQLSeyMZUOPc_djENAhF0F3Bq15te5Co0iMA0_Af_f55lNpU-y2Q/viewform?usp=header" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-block',
+                                padding: '12px 24px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                textDecoration: 'none',
+                                borderRadius: '4px',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                transition: 'background-color 0.3s ease'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#388e3c'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#4CAF50'}
+                        >
+                            Provide Feedback
+                        </a>
+                    </div>
                 </div>
             );
         };
