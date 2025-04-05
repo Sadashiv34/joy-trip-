@@ -1,16 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DEGELT25T1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-DEGELT25T1');
-</script>
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tourist Places Near Me</title>
@@ -470,12 +460,6 @@
                         popup.setLngLat(marker.position)
                             .addTo(map);
                         onMarkerClick(index);
-                        
-                        // Track place selection
-                        gtag('event', 'select_place', {
-                            'place_name': marker.title,
-                            'place_location': marker.formatted
-                        });
                     };
                     markerElement.getElement().addEventListener('click', clickHandler);
                     markersRef.current.push(markerElement);
@@ -511,13 +495,6 @@
             };
 
             const handleSubmit = () => {
-                // Track feedback submission
-                trackEvent('feedback_submitted', {
-                    'event_category': 'feedback',
-                    'has_photos': photos.filter(Boolean).length > 0,
-                    'has_text': feedback.length > 0
-                });
-
                 // Here you would typically send the feedback and photos to your server
                 console.log('Feedback:', feedback);
                 console.log('Photos:', photos.filter(Boolean).length);
@@ -584,63 +561,10 @@
             const [showFeedback, setShowFeedback] = React.useState(false);
             const [searchRadius, setSearchRadius] = React.useState(20); // Default 20km radius
 
-            // Track page view when component mounts
-            React.useEffect(() => {
-                try {
-                    // Ensure gtag is available
-                    if (typeof gtag === 'function') {
-                        // Track page view with more details
-                        gtag('event', 'page_view', {
-                            'page_title': 'Tourist Places Near Me',
-                            'page_location': window.location.href,
-                            'page_path': window.location.pathname,
-                            'send_to': 'G-T12GJTTRQ2'
-                        });
-                        console.log('Page view tracked successfully');
-                    } else {
-                        console.error('Google Analytics not loaded yet');
-                    }
-                } catch (error) {
-                    console.error('Error tracking page view:', error);
-                }
-            }, []);
-
-            const trackEvent = (eventName, eventParams = {}) => {
-                try {
-                    const eventData = {
-                        ...eventParams,
-                        'send_to': 'G-T12GJTTRQ2',
-                        'timestamp': new Date().toISOString()
-                    };
-
-                    if (window.gaIsReady && typeof gtag === 'function') {
-                        gtag('event', eventName, eventData);
-                        console.log(`Event tracked: ${eventName}`, eventParams);
-                    } else {
-                        // Queue the event if GA isn't ready
-                        window.gaEventQueue.push({
-                            name: eventName,
-                            params: eventData
-                        });
-                        console.log(`Event queued: ${eventName}`);
-                    }
-                } catch (error) {
-                    console.error(`Error tracking event ${eventName}:`, error);
-                }
-            };
-
             const fetchPlaces = async (position) => {
                 try {
                     const { latitude, longitude } = position.coords;
                     setUserLocation([longitude, latitude]);
-
-                    // Track location access
-                    trackEvent('location_access', {
-                        'event_category': 'user_interaction',
-                        'latitude': latitude,
-                        'longitude': longitude,
-                        'search_radius': searchRadius
-                    });
 
                     // Calculate bbox based on radius
                     // Approximate conversion: 1 degree ≈ 111km at equator
@@ -685,23 +609,9 @@
 
                     setPlaces(touristPlaces);
                     setError(null);
-                    
-                    // Track places loaded
-                    trackEvent('places_loaded', {
-                        'event_category': 'data',
-                        'count': touristPlaces.length,
-                        'has_results': touristPlaces.length > 0
-                    });
                 } catch (err) {
                     setError('Error fetching places. Please check your internet connection and try again.');
                     console.error('Error fetching places:', err);
-                    
-                    // Track error
-                    trackEvent('error', {
-                        'event_category': 'error',
-                        'error_type': 'places_fetch_error',
-                        'error_message': err.message
-                    });
                 } finally {
                     setLoading(false);
                 }
@@ -800,11 +710,6 @@
                                             }
                                         );
                                     }
-                                    // Track radius change
-                                    trackEvent('radius_changed', {
-                                        'event_category': 'user_interaction',
-                                        'new_radius': newRadius
-                                    });
                                 }}
                             />
                             <div className="radius-labels">
@@ -815,31 +720,6 @@
                                 Search within {searchRadius}km
                             </div>
                         </div>
-                    </div>
-
-                    {/* Test button for Google Analytics */}
-                    <div style={{marginTop: '20px', textAlign: 'center'}}>
-                        <button 
-                            onClick={() => {
-                                trackEvent('test_event', {
-                                    'event_category': 'test',
-                                    'event_label': 'Test Button Click',
-                                    'timestamp': new Date().toISOString()
-                                });
-                                console.log('Test event sent to Google Analytics');
-                                alert('Test event sent to Google Analytics. Check your GA dashboard and browser console for details.');
-                            }}
-                            style={{
-                                padding: '10px 20px',
-                                backgroundColor: '#4CAF50',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Test Google Analytics
-                        </button>
                     </div>
 
                     {showFeedback && (
