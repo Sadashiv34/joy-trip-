@@ -1,56 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Google tag (gtag.js) - MUST BE FIRST -->
+    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-T12GJTTRQ2"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      // Configure with measurement protocol
-      gtag('config', 'G-T12GJTTRQ2', {
-        'transport_url': 'https://www.google-analytics.com',
-        'first_party_collection': true,
-        'debug_mode': true,
-        'send_page_view': true
-      });
-
-      // Create a queue for events if GA isn't loaded yet
-      window.gaEventQueue = [];
-      window.gaIsReady = false;
-
-      // Track initial pageview
-      gtag('event', 'page_view');
-      
-      // Log when GA is loaded
-      window.addEventListener('load', function() {
-        console.log('Window loaded, checking GA...');
-        // Check GA every 100ms for 5 seconds
-        let attempts = 0;
-        const checkGA = setInterval(() => {
-          if (typeof gtag === 'function') {
-            console.log('Google Analytics is loaded');
-            window.gaIsReady = true;
-            // Process any queued events
-            while (window.gaEventQueue.length > 0) {
-              const event = window.gaEventQueue.shift();
-              gtag('event', event.name, event.params);
-              console.log('Processed queued event:', event.name);
-            }
-            clearInterval(checkGA);
-            // Send a test event on load
-            gtag('event', 'app_loaded', {
-              'event_category': 'application',
-              'event_label': 'Initial Load'
-            });
-          } else if (attempts >= 50) { // 5 seconds timeout
-            console.error('Google Analytics failed to load after 5 seconds');
-            clearInterval(checkGA);
-          }
-          attempts++;
-        }, 100);
-      });
+      gtag('config', 'G-T12GJTTRQ2');
     </script>
 
     <meta charset="UTF-8">
