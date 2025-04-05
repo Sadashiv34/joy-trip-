@@ -1,15 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DEGELT25T1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+    <!-- Google tag (gtag.js) - MUST BE FIRST -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-T12GJTTRQ2"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
 
-  gtag('config', 'G-DEGELT25T1');
-</script>
+      // Configure without restrictions
+      gtag('config', 'G-T12GJTTRQ2', {
+        'debug_mode': true,
+        'send_page_view': true,
+        'allow_google_signals': true,
+        'allow_ad_personalization_signals': true,
+        'allow_ad_user_data': true,
+        'allow_google_personalization': true
+      });
+
+      // Create a queue for events if GA isn't loaded yet
+      window.gaEventQueue = [];
+      window.gaIsReady = false;
+
+      // Track initial pageview
+      gtag('event', 'page_view');
+      
+      // Log when GA is loaded
+      window.addEventListener('load', function() {
+        console.log('Window loaded, checking GA...');
+        // Check GA every 100ms for 5 seconds
+        let attempts = 0;
+        const checkGA = setInterval(() => {
+          if (typeof gtag === 'function') {
+            console.log('Google Analytics is loaded');
+            window.gaIsReady = true;
+            // Process any queued events
+            while (window.gaEventQueue.length > 0) {
+              const event = window.gaEventQueue.shift();
+              gtag('event', event.name, event.params);
+              console.log('Processed queued event:', event.name);
+            }
+            clearInterval(checkGA);
+            // Send a test event on load
+            gtag('event', 'app_loaded', {
+              'event_category': 'application',
+              'event_label': 'Initial Load'
+            });
+          } else if (attempts >= 50) { // 5 seconds timeout
+            console.error('Google Analytics failed to load after 5 seconds');
+            clearInterval(checkGA);
+          }
+          attempts++;
+        }, 100);
+      });
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tourist Places Near Me</title>
@@ -179,6 +224,169 @@
                 max-height: 40vh;
             }
         }
+
+        /* Add feedback form styles */
+        .feedback-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .feedback-form {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .feedback-form h2 {
+            margin: 0 0 20px 0;
+            color: #2e7d32;
+        }
+
+        .feedback-form textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-family: inherit;
+        }
+
+        .photo-upload-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .photo-upload-box {
+            aspect-ratio: 1;
+            border: 2px dashed #4CAF50;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .photo-upload-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-upload-box input {
+            display: none;
+        }
+
+        .photo-upload-box .placeholder {
+            color: #666;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .feedback-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .feedback-buttons button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .submit-button {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .cancel-button {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .submit-button:hover {
+            background: #388e3c;
+        }
+
+        .cancel-button:hover {
+            background: #e0e0e0;
+        }
+
+        /* Radius selector styles */
+        .radius-selector {
+            background: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: 0 auto 20px;
+        }
+
+        .radius-selector h3 {
+            margin: 0 0 10px 0;
+            color: #2e7d32;
+            font-size: 14px;
+        }
+
+        .radius-slider {
+            width: 100%;
+            position: relative;
+        }
+
+        .radius-slider input[type="range"] {
+            width: 100%;
+            height: 3px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .radius-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #4CAF50;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background .15s ease-in-out;
+        }
+
+        .radius-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .radius-value {
+            text-align: center;
+            color: #4CAF50;
+            font-weight: 500;
+            margin-top: 8px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -325,6 +533,91 @@
             return <div ref={mapContainer} className="map-container" />;
         };
 
+        // Feedback Component
+        const FeedbackForm = ({ onClose }) => {
+            const [feedback, setFeedback] = React.useState('');
+            const [photos, setPhotos] = React.useState([null, null, null]);
+            const [previewUrls, setPreviewUrls] = React.useState([null, null, null]);
+
+            const handlePhotoChange = (index, event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const newPhotos = [...photos];
+                    newPhotos[index] = file;
+                    setPhotos(newPhotos);
+
+                    // Create preview URL
+                    const previewUrl = URL.createObjectURL(file);
+                    const newPreviewUrls = [...previewUrls];
+                    newPreviewUrls[index] = previewUrl;
+                    setPreviewUrls(newPreviewUrls);
+                }
+            };
+
+            const handleSubmit = () => {
+                // Track feedback submission
+                trackEvent('feedback_submitted', {
+                    'event_category': 'feedback',
+                    'has_photos': photos.filter(Boolean).length > 0,
+                    'has_text': feedback.length > 0
+                });
+
+                // Here you would typically send the feedback and photos to your server
+                console.log('Feedback:', feedback);
+                console.log('Photos:', photos.filter(Boolean).length);
+                
+                alert('Thank you for your feedback!');
+                onClose();
+            };
+
+            React.useEffect(() => {
+                // Cleanup preview URLs when component unmounts
+                return () => {
+                    previewUrls.forEach(url => {
+                        if (url) URL.revokeObjectURL(url);
+                    });
+                };
+            }, []);
+
+            return (
+                <div className="feedback-overlay" onClick={(e) => e.target.className === 'feedback-overlay' && onClose()}>
+                    <div className="feedback-form">
+                        <h2>Please Share Your Feedback</h2>
+                        <textarea
+                            placeholder="Tell us about your experience..."
+                            value={feedback}
+                            onChange={(e) => setFeedback(e.target.value)}
+                        />
+                        <div className="photo-upload-container">
+                            {[0, 1, 2].map((index) => (
+                                <div key={index} className="photo-upload-box">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handlePhotoChange(index, e)}
+                                        id={`photo-${index}`}
+                                    />
+                                    <label htmlFor={`photo-${index}`}>
+                                        {previewUrls[index] ? (
+                                            <img src={previewUrls[index]} alt={`Upload ${index + 1}`} />
+                                        ) : (
+                                            <div className="placeholder">
+                                                Click to upload photo {index + 1}
+                                            </div>
+                                        )}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="feedback-buttons">
+                            <button className="cancel-button" onClick={onClose}>Cancel</button>
+                            <button className="submit-button" onClick={handleSubmit}>Submit Feedback</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // App Component
         const App = () => {
             const [userLocation, setUserLocation] = React.useState(null);
@@ -332,6 +625,8 @@
             const [selectedPlace, setSelectedPlace] = React.useState(null);
             const [error, setError] = React.useState(null);
             const [loading, setLoading] = React.useState(true);
+            const [showFeedback, setShowFeedback] = React.useState(false);
+            const [searchRadius, setSearchRadius] = React.useState(20); // Default 20km radius
 
             // Track page view when component mounts
             React.useEffect(() => {
@@ -378,93 +673,112 @@
                 }
             };
 
-            React.useEffect(() => {
-                const fetchPlaces = async (position) => {
-                    try {
-                        const { latitude, longitude } = position.coords;
-                        setUserLocation([longitude, latitude]);
+            const fetchPlaces = async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+                    setUserLocation([longitude, latitude]);
 
-                        // Track location access
-                        trackEvent('location_access', {
-                            'event_category': 'user_interaction',
-                            'latitude': latitude,
-                            'longitude': longitude
-                        });
+                    // Track location access
+                    trackEvent('location_access', {
+                        'event_category': 'user_interaction',
+                        'latitude': latitude,
+                        'longitude': longitude,
+                        'search_radius': searchRadius
+                    });
 
-                        const bbox = [
-                            longitude - 0.1,
-                            latitude - 0.1,
-                            longitude + 0.1,
-                            latitude + 0.1
-                        ];
+                    // Calculate bbox based on radius
+                    // Approximate conversion: 1 degree ≈ 111km at equator
+                    const degreeChange = searchRadius / 111;
+                    const bbox = [
+                        longitude - degreeChange,
+                        latitude - degreeChange,
+                        longitude + degreeChange,
+                        latitude + degreeChange
+                    ];
 
-                        const response = await axios.get(
-                            `https://api.geoapify.com/v2/places`,
-                            {
-                                params: {
-                                    categories: 'tourism.sights',
-                                    filter: `rect:${bbox.join(',')}`,
-                                    limit: 20,
-                                    apiKey: GEOAPIFY_API_KEY
-                                }
+                    const response = await axios.get(
+                        `https://api.geoapify.com/v2/places`,
+                        {
+                            params: {
+                                categories: 'tourism.sights',
+                                filter: `rect:${bbox.join(',')}`,
+                                limit: 20,
+                                apiKey: GEOAPIFY_API_KEY
                             }
-                        );
+                        }
+                    );
 
-                        const touristPlaces = response.data.features
-                            .filter(feature => 
-                                feature.properties.name && 
-                                feature.properties.lat && 
-                                feature.properties.lon
-                            )
-                            .map(feature => ({
-                                name: feature.properties.name,
-                                location: {
-                                    lat: feature.properties.lat,
-                                    lon: feature.properties.lon,
-                                    formatted: feature.properties.formatted || 'Address not available'
-                                },
-                                description: feature.properties.description || 'No description available',
-                                categories: feature.properties.categories,
-                                website: feature.properties.website,
-                                distance: feature.properties.distance
-                            }));
+                    const touristPlaces = response.data.features
+                        .filter(feature => 
+                            feature.properties.name && 
+                            feature.properties.lat && 
+                            feature.properties.lon
+                        )
+                        .map(feature => ({
+                            name: feature.properties.name,
+                            location: {
+                                lat: feature.properties.lat,
+                                lon: feature.properties.lon,
+                                formatted: feature.properties.formatted || 'Address not available'
+                            },
+                            description: feature.properties.description || 'No description available',
+                            categories: feature.properties.categories,
+                            website: feature.properties.website,
+                            distance: feature.properties.distance
+                        }));
 
-                        setPlaces(touristPlaces);
-                        setError(null);
-                        
-                        // Track places loaded
-                        trackEvent('places_loaded', {
-                            'event_category': 'data',
-                            'count': touristPlaces.length,
-                            'has_results': touristPlaces.length > 0
-                        });
-                    } catch (err) {
-                        setError('Error fetching places. Please check your internet connection and try again.');
-                        console.error('Error fetching places:', err);
-                        
-                        // Track error
-                        trackEvent('error', {
-                            'event_category': 'error',
-                            'error_type': 'places_fetch_error',
-                            'error_message': err.message
-                        });
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-
-                const handleLocationError = (err) => {
-                    setError('Please enable location services to use this app.');
+                    setPlaces(touristPlaces);
+                    setError(null);
+                    
+                    // Track places loaded
+                    trackEvent('places_loaded', {
+                        'event_category': 'data',
+                        'count': touristPlaces.length,
+                        'has_results': touristPlaces.length > 0
+                    });
+                } catch (err) {
+                    setError('Error fetching places. Please check your internet connection and try again.');
+                    console.error('Error fetching places:', err);
+                    
+                    // Track error
+                    trackEvent('error', {
+                        'event_category': 'error',
+                        'error_type': 'places_fetch_error',
+                        'error_message': err.message
+                    });
+                } finally {
                     setLoading(false);
-                    console.error('Geolocation error:', err);
-                };
+                }
+            };
 
+            const handleLocationError = (err) => {
+                setError('Please enable location services to use this app.');
+                setLoading(false);
+                console.error('Geolocation error:', err);
+            };
+
+            React.useEffect(() => {
                 navigator.geolocation.getCurrentPosition(fetchPlaces, handleLocationError, {
                     enableHighAccuracy: true,
                     timeout: 10000,
                     maximumAge: 0
                 });
             }, []);
+
+            // Add beforeunload event listener
+            React.useEffect(() => {
+                const handleBeforeUnload = (e) => {
+                    if (!showFeedback) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                        setShowFeedback(true);
+                        return '';
+                    }
+                };
+
+                window.addEventListener('beforeunload', handleBeforeUnload);
+                return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+            }, [showFeedback]);
 
             if (loading) {
                 return (
@@ -490,6 +804,7 @@
             return (
                 <div>
                     <h1>Nearby Tourist Places</h1>
+                    
                     <ErrorBoundary>
                         <Map 
                             center={userLocation} 
@@ -504,6 +819,76 @@
                             onMarkerClick={(index) => setSelectedPlace(places[index])}
                         />
                     </ErrorBoundary>
+                    
+                    {/* Radius Selector - Moved below map */}
+                    <div className="radius-selector">
+                        <h3>Adjust Search Distance</h3>
+                        <div className="radius-slider">
+                            <input
+                                type="range"
+                                min="20"
+                                max="110"
+                                value={searchRadius}
+                                onChange={(e) => {
+                                    const newRadius = parseInt(e.target.value);
+                                    setSearchRadius(newRadius);
+                                    // Refetch places with new radius if we have user location
+                                    if (userLocation) {
+                                        navigator.geolocation.getCurrentPosition(
+                                            fetchPlaces,
+                                            handleLocationError,
+                                            {
+                                                enableHighAccuracy: true,
+                                                timeout: 10000,
+                                                maximumAge: 0
+                                            }
+                                        );
+                                    }
+                                    // Track radius change
+                                    trackEvent('radius_changed', {
+                                        'event_category': 'user_interaction',
+                                        'new_radius': newRadius
+                                    });
+                                }}
+                            />
+                            <div className="radius-labels">
+                                <span>20km</span>
+                                <span>110km</span>
+                            </div>
+                            <div className="radius-value">
+                                Search within {searchRadius}km
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Test button for Google Analytics */}
+                    <div style={{marginTop: '20px', textAlign: 'center'}}>
+                        <button 
+                            onClick={() => {
+                                trackEvent('test_event', {
+                                    'event_category': 'test',
+                                    'event_label': 'Test Button Click',
+                                    'timestamp': new Date().toISOString()
+                                });
+                                console.log('Test event sent to Google Analytics');
+                                alert('Test event sent to Google Analytics. Check your GA dashboard and browser console for details.');
+                            }}
+                            style={{
+                                padding: '10px 20px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Test Google Analytics
+                        </button>
+                    </div>
+
+                    {showFeedback && (
+                        <FeedbackForm onClose={() => setShowFeedback(false)} />
+                    )}
                 </div>
             );
         };
