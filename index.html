@@ -1,19 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tourist Places Near Me</title>
-    
-    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js) - MUST BE FIRST -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-T12GJTTRQ2"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-T12GJTTRQ2');
+      // Configure with measurement protocol
+      gtag('config', 'G-T12GJTTRQ2', {
+        'transport_url': 'https://www.google-analytics.com',
+        'first_party_collection': true,
+        'debug_mode': true,
+        'send_page_view': true
+      });
+
+      // Create a queue for events if GA isn't loaded yet
+      window.gaEventQueue = [];
+      window.gaIsReady = false;
+
+      // Track initial pageview
+      gtag('event', 'page_view');
+      
+      // Log when GA is loaded
+      window.addEventListener('load', function() {
+        console.log('Window loaded, checking GA...');
+        // Check GA every 100ms for 5 seconds
+        let attempts = 0;
+        const checkGA = setInterval(() => {
+          if (typeof gtag === 'function') {
+            console.log('Google Analytics is loaded');
+            window.gaIsReady = true;
+            // Process any queued events
+            while (window.gaEventQueue.length > 0) {
+              const event = window.gaEventQueue.shift();
+              gtag('event', event.name, event.params);
+              console.log('Processed queued event:', event.name);
+            }
+            clearInterval(checkGA);
+            // Send a test event on load
+            gtag('event', 'app_loaded', {
+              'event_category': 'application',
+              'event_label': 'Initial Load'
+            });
+          } else if (attempts >= 50) { // 5 seconds timeout
+            console.error('Google Analytics failed to load after 5 seconds');
+            clearInterval(checkGA);
+          }
+          attempts++;
+        }, 100);
+      });
     </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tourist Places Near Me</title>
     
     <!-- Dependencies -->
     <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
@@ -334,6 +376,51 @@
             const [error, setError] = React.useState(null);
             const [loading, setLoading] = React.useState(true);
 
+            // Track page view when component mounts
+            React.useEffect(() => {
+                try {
+                    // Ensure gtag is available
+                    if (typeof gtag === 'function') {
+                        // Track page view with more details
+                        gtag('event', 'page_view', {
+                            'page_title': 'Tourist Places Near Me',
+                            'page_location': window.location.href,
+                            'page_path': window.location.pathname,
+                            'send_to': 'G-T12GJTTRQ2'
+                        });
+                        console.log('Page view tracked successfully');
+                    } else {
+                        console.error('Google Analytics not loaded yet');
+                    }
+                } catch (error) {
+                    console.error('Error tracking page view:', error);
+                }
+            }, []);
+
+            const trackEvent = (eventName, eventParams = {}) => {
+                try {
+                    const eventData = {
+                        ...eventParams,
+                        'send_to': 'G-T12GJTTRQ2',
+                        'timestamp': new Date().toISOString()
+                    };
+
+                    if (window.gaIsReady && typeof gtag === 'function') {
+                        gtag('event', eventName, eventData);
+                        console.log(`Event tracked: ${eventName}`, eventParams);
+                    } else {
+                        // Queue the event if GA isn't ready
+                        window.gaEventQueue.push({
+                            name: eventName,
+                            params: eventData
+                        });
+                        console.log(`Event queued: ${eventName}`);
+                    }
+                } catch (error) {
+                    console.error(`Error tracking event ${eventName}:`, error);
+                }
+            };
+
             React.useEffect(() => {
                 const fetchPlaces = async (position) => {
                     try {
@@ -341,7 +428,8 @@
                         setUserLocation([longitude, latitude]);
 
                         // Track location access
-                        gtag('event', 'location_access', {
+                        trackEvent('location_access', {
+                            'event_category': 'user_interaction',
                             'latitude': latitude,
                             'longitude': longitude
                         });
@@ -388,15 +476,18 @@
                         setError(null);
                         
                         // Track places loaded
-                        gtag('event', 'places_loaded', {
-                            'count': touristPlaces.length
+                        trackEvent('places_loaded', {
+                            'event_category': 'data',
+                            'count': touristPlaces.length,
+                            'has_results': touristPlaces.length > 0
                         });
                     } catch (err) {
                         setError('Error fetching places. Please check your internet connection and try again.');
                         console.error('Error fetching places:', err);
                         
                         // Track error
-                        gtag('event', 'error', {
+                        trackEvent('error', {
+                            'event_category': 'error',
                             'error_type': 'places_fetch_error',
                             'error_message': err.message
                         });
