@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tourist Places Near Me</title>
     
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-T12GJTTRQ2"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-T12GJTTRQ2');
+    </script>
+    
     <!-- Dependencies -->
     <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
@@ -49,12 +59,7 @@
 
         /* Place list styles */
         .place-list {
-            margin-top: 20px;
-            padding: 10px;
-            background: #f5f5f5;
-            border-radius: 4px;
-            max-height: 60vh;
-            overflow-y: auto;
+            display: none;
         }
 
         .place-item {
@@ -91,40 +96,51 @@
 
         /* Selected place styles */
         .selected-place {
-            margin: 20px 0;
-            padding: 20px;
+            margin: 0;
+            padding: 10px;
             background: #e8f5e9;
             border-radius: 4px;
             border-left: 4px solid #4CAF50;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 300px;
         }
 
         .selected-place h2 {
-            margin: 0 0 10px 0;
+            margin: 0 0 8px 0;
             color: #2e7d32;
+            font-size: 16px;
         }
 
         .selected-place p {
-            margin: 8px 0;
+            margin: 4px 0;
             color: #333;
-            line-height: 1.6;
+            line-height: 1.4;
+            font-size: 14px;
         }
 
         .selected-place a {
             display: inline-block;
-            margin-top: 15px;
-            padding: 10px 20px;
+            margin-top: 8px;
+            padding: 6px 12px;
             background: #4CAF50;
             color: white;
             text-decoration: none;
             border-radius: 4px;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 14px;
         }
 
         .selected-place a:hover {
             background: #388e3c;
-            transform: translateY(-2px);
+        }
+
+        .maplibregl-popup {
+            max-width: 350px !important;
+        }
+
+        .maplibregl-popup-content {
+            padding: 0 !important;
+            border-radius: 4px !important;
         }
 
         /* Loading state */
@@ -201,8 +217,10 @@
         const Map = ({ center, markers = [], zoom = 13, onMarkerClick }) => {
             const mapContainer = React.useRef(null);
             const mapInstance = React.useRef(null);
+            const markersRef = React.useRef([]);
             const [error, setError] = React.useState(null);
 
+            // Initialize map only once
             React.useEffect(() => {
                 if (!mapContainer.current || !center) return;
 
@@ -232,31 +250,74 @@
 
                     mapInstance.current = map;
 
-                    map.on('load', () => {
-                        // Add user location marker
-                        new maplibregl.Marker({ color: '#FF0000' })
-                            .setLngLat(center)
-                            .setPopup(new maplibregl.Popup().setHTML('<strong>Your Location</strong>'))
-                            .addTo(map);
-
-                        // Add place markers
-                        markers.forEach((marker, index) => {
-                            const markerElement = new maplibregl.Marker({ color: '#4CAF50' })
-                                .setLngLat(marker.position)
-                                .setPopup(new maplibregl.Popup().setHTML(`<strong>${marker.title}</strong>`))
-                                .addTo(map);
-
-                            markerElement.getElement().addEventListener('click', () => {
-                                onMarkerClick(index);
-                            });
-                        });
+                    map.on('error', (e) => {
+                        console.error('Map error:', e);
+                        setError('Error loading map tiles. Please check your internet connection.');
                     });
 
-                    return () => map.remove();
+                    return () => {
+                        markersRef.current.forEach(marker => marker.remove());
+                        map.remove();
+                    };
                 } catch (err) {
-                    setError(err.message);
+                    console.error('Map initialization error:', err);
+                    setError('Error initializing map. Please refresh the page.');
                 }
-            }, [center, markers, zoom, onMarkerClick]);
+            }, [center, zoom]); // Only re-run when center or zoom changes
+
+            // Update markers separately
+            React.useEffect(() => {
+                if (!mapInstance.current) return;
+
+                const map = mapInstance.current;
+                
+                // Clear existing markers
+                markersRef.current.forEach(marker => marker.remove());
+                markersRef.current = [];
+
+                // Add user location marker
+                const userMarker = new maplibregl.Marker({ color: '#FF0000' })
+                    .setLngLat(center)
+                    .setPopup(new maplibregl.Popup().setHTML('<strong>Your Location</strong>'))
+                    .addTo(map);
+                markersRef.current.push(userMarker);
+
+                // Add place markers
+                markers.forEach((marker, index) => {
+                    const markerElement = new maplibregl.Marker({ color: '#4CAF50' })
+                        .setLngLat(marker.position)
+                        .addTo(map);
+
+                    const popup = new maplibregl.Popup({
+                        offset: 25,
+                        closeButton: true,
+                        closeOnClick: false,
+                        className: 'place-popup'
+                    })
+                    .setHTML(`
+                        <div class="selected-place">
+                            <h2>${marker.title || 'Unnamed Place'}</h2>
+                            <p>${marker.formatted || 'Address not available'}</p>
+                            ${marker.description ? `<p>${marker.description}</p>` : ''}
+                            ${marker.website ? `<a href="${marker.website}" target="_blank" rel="noopener noreferrer">Visit Website</a>` : ''}
+                        </div>
+                    `);
+
+                    const clickHandler = () => {
+                        popup.setLngLat(marker.position)
+                            .addTo(map);
+                        onMarkerClick(index);
+                        
+                        // Track place selection
+                        gtag('event', 'select_place', {
+                            'place_name': marker.title,
+                            'place_location': marker.formatted
+                        });
+                    };
+                    markerElement.getElement().addEventListener('click', clickHandler);
+                    markersRef.current.push(markerElement);
+                });
+            }, [markers, onMarkerClick]); // Only update when markers change
 
             if (error) {
                 return <div className="error-message">Error loading map: {error}</div>;
@@ -279,6 +340,12 @@
                         const { latitude, longitude } = position.coords;
                         setUserLocation([longitude, latitude]);
 
+                        // Track location access
+                        gtag('event', 'location_access', {
+                            'latitude': latitude,
+                            'longitude': longitude
+                        });
+
                         const bbox = [
                             longitude - 0.1,
                             latitude - 0.1,
@@ -298,24 +365,41 @@
                             }
                         );
 
-                        const touristPlaces = response.data.features.map(feature => ({
-                            name: feature.properties.name,
-                            location: {
-                                lat: feature.properties.lat,
-                                lon: feature.properties.lon,
-                                formatted: feature.properties.formatted
-                            },
-                            description: feature.properties.description,
-                            categories: feature.properties.categories,
-                            website: feature.properties.website,
-                            distance: feature.properties.distance
-                        }));
+                        const touristPlaces = response.data.features
+                            .filter(feature => 
+                                feature.properties.name && 
+                                feature.properties.lat && 
+                                feature.properties.lon
+                            )
+                            .map(feature => ({
+                                name: feature.properties.name,
+                                location: {
+                                    lat: feature.properties.lat,
+                                    lon: feature.properties.lon,
+                                    formatted: feature.properties.formatted || 'Address not available'
+                                },
+                                description: feature.properties.description || 'No description available',
+                                categories: feature.properties.categories,
+                                website: feature.properties.website,
+                                distance: feature.properties.distance
+                            }));
 
                         setPlaces(touristPlaces);
                         setError(null);
+                        
+                        // Track places loaded
+                        gtag('event', 'places_loaded', {
+                            'count': touristPlaces.length
+                        });
                     } catch (err) {
                         setError('Error fetching places. Please check your internet connection and try again.');
                         console.error('Error fetching places:', err);
+                        
+                        // Track error
+                        gtag('event', 'error', {
+                            'error_type': 'places_fetch_error',
+                            'error_message': err.message
+                        });
                     } finally {
                         setLoading(false);
                     }
@@ -355,51 +439,23 @@
                 );
             }
 
-            const markers = places.map(place => ({
-                position: [place.location.lon, place.location.lat],
-                title: place.name
-            }));
-
             return (
                 <div>
                     <h1>Nearby Tourist Places</h1>
                     <ErrorBoundary>
                         <Map 
                             center={userLocation} 
-                            markers={markers} 
+                            markers={places.map(place => ({
+                                position: [place.location.lon, place.location.lat],
+                                title: place.name,
+                                formatted: place.location.formatted,
+                                description: place.description,
+                                website: place.website
+                            }))} 
                             zoom={13}
                             onMarkerClick={(index) => setSelectedPlace(places[index])}
                         />
                     </ErrorBoundary>
-                    {selectedPlace && (
-                        <div className="selected-place">
-                            <h2>{selectedPlace.name}</h2>
-                            <p>{selectedPlace.location.formatted}</p>
-                            {selectedPlace.description && <p>{selectedPlace.description}</p>}
-                            {selectedPlace.website && (
-                                <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer">
-                                    Visit Website
-                                </a>
-                            )}
-                        </div>
-                    )}
-                    <div className="place-list">
-                        {places.length === 0 ? (
-                            <p>No tourist places found nearby. Try expanding your search area.</p>
-                        ) : (
-                            places.map((place, index) => (
-                                <div 
-                                    key={index} 
-                                    className={`place-item ${selectedPlace?.name === place.name ? 'selected' : ''}`}
-                                    onClick={() => setSelectedPlace(place)}
-                                >
-                                    <h3>{place.name}</h3>
-                                    <p>{place.location.formatted}</p>
-                                    <p>Distance: {place.distance ? `${(place.distance / 1000).toFixed(1)} km` : 'N/A'}</p>
-                                </div>
-                            ))
-                        )}
-                    </div>
                 </div>
             );
         };
