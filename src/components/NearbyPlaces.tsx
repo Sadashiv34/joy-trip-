@@ -5,6 +5,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 const GEOAPIFY_API_KEY = '49f54774eecb471b98f1afec04a2df6a';
 
+// Constants for distance calculation
+const EARTH_RADIUS = 6371; // Earth's radius in kilometers
+const DEGREES_PER_KM = 1 / 111.32; // Approximate degrees per kilometer at the equator
+
 interface Place {
     name: string;
     location: {
@@ -88,43 +92,79 @@ export const NearbyPlaces: React.FC = () => {
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [places, setPlaces] = useState<Place[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+    const [searchDistance, setSearchDistance] = useState<number>(5); // Default 5km
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    useEffect(() => {
-        navigator.geolocation.getCurrentPosition(async (position) => {
-            const { latitude, longitude } = position.coords;
-            setUserLocation([longitude, latitude]);
+    const calculateBoundingBox = (lat: number, lon: number, distanceKm: number) => {
+        const latDelta = distanceKm * DEGREES_PER_KM;
+        const lonDelta = distanceKm * DEGREES_PER_KM / Math.cos(lat * Math.PI / 180);
+        
+        return [
+            lon - lonDelta,
+            lat - latDelta,
+            lon + lonDelta,
+            lat + latDelta
+        ];
+    };
 
-            const bbox = [
-                longitude - 0.1,
-                latitude - 0.1,
-                longitude + 0.1,
-                latitude + 0.1
-            ];
+    const fetchNearbyPlaces = async (lat: number, lon: number, distance: number) => {
+        setIsLoading(true);
+        try {
+            const bbox = calculateBoundingBox(lat, lon, distance);
+            const response = await axios.get(
+                `https://api.geoapify.com/v2/places?categories=tourism.sights&filter=rect:${bbox.join(',')}&limit=20&apiKey=${GEOAPIFY_API_KEY}`
+            );
 
-            try {
-                const response = await axios.get(
-                    `https://api.geoapify.com/v2/places?categories=tourism.sights&filter=rect:${bbox.join(',')}&limit=20&apiKey=${GEOAPIFY_API_KEY}`
-                );
-
-                const touristPlaces = response.data.features.map((feature: any) => ({
+            const touristPlaces = response.data.features.map((feature: any) => {
+                const placeLat = feature.properties.lat;
+                const placeLon = feature.properties.lon;
+                const distance = calculateDistance(lat, lon, placeLat, placeLon);
+                
+                return {
                     name: feature.properties.name,
                     location: {
-                        lat: feature.properties.lat,
-                        lon: feature.properties.lon,
+                        lat: placeLat,
+                        lon: placeLon,
                         formatted: feature.properties.formatted
                     },
                     description: feature.properties.description,
                     categories: feature.properties.categories,
                     website: feature.properties.website,
-                    distance: feature.properties.distance
-                }));
+                    distance: distance
+                };
+            });
 
-                setPlaces(touristPlaces);
-            } catch (error) {
-                console.error('Error fetching places:', error);
-            }
+            setPlaces(touristPlaces);
+        } catch (error) {
+            console.error('Error fetching places:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return EARTH_RADIUS * c * 1000; // Distance in meters
+    };
+
+    useEffect(() => {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            const { latitude, longitude } = position.coords;
+            setUserLocation([longitude, latitude]);
+            await fetchNearbyPlaces(latitude, longitude, searchDistance);
         });
-    }, []);
+    }, [searchDistance]);
+
+    const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newDistance = parseInt(e.target.value);
+        setSearchDistance(newDistance);
+    };
 
     if (!userLocation) {
         return <div>Loading... Please enable location services.</div>;
@@ -138,6 +178,18 @@ export const NearbyPlaces: React.FC = () => {
     return (
         <div>
             <h1>Nearby Tourist Places</h1>
+            <div className="distance-control">
+                <label htmlFor="distance">Search Distance: {searchDistance} km</label>
+                <input
+                    type="range"
+                    id="distance"
+                    min="1"
+                    max="20"
+                    value={searchDistance}
+                    onChange={handleDistanceChange}
+                />
+            </div>
+            {isLoading && <div>Loading places...</div>}
             <Map 
                 center={userLocation} 
                 markers={markers} 

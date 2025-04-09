@@ -108,6 +108,70 @@ body {
   font-size: 16px;
   color: #666;
 }
+
+.location-permission {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  text-align: center;
+  background-color: #f5f5f5;
+}
+
+.location-permission h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.location-permission p {
+  color: #666;
+  margin-bottom: 10px;
+  font-size: 16px;
+  max-width: 500px;
+}
+
+.location-button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background-color 0.3s;
+}
+
+.location-button:hover {
+  background-color: #45a049;
+}
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  text-align: center;
+  background-color: #f5f5f5;
+}
+
+.error-message h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.error-message p {
+  color: #666;
+  margin-bottom: 10px;
+  font-size: 16px;
+  max-width: 500px;
+}
 `;
 
 // Add style tag to document
@@ -144,6 +208,8 @@ interface MapProps {
 const Map: React.FC<MapProps> = ({ center, markers = [], zoom = 13, onMarkerClick }) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<maplibregl.Map | null>(null);
+    const popupRefs = useRef<maplibregl.Popup[]>([]);
+    const activePopupIndex = useRef<number | null>(null);
 
     useEffect(() => {
         if (!mapContainer.current || !center) return;
@@ -173,25 +239,64 @@ const Map: React.FC<MapProps> = ({ center, markers = [], zoom = 13, onMarkerClic
 
         mapInstance.current = map;
 
+        // Clear existing popups array
+        popupRefs.current = [];
+
         // Add user location marker
+        const userPopup = new maplibregl.Popup({ closeOnClick: false, closeButton: true })
+            .setHTML('Your Location');
+        
         new maplibregl.Marker({ color: '#FF0000' })
             .setLngLat(center)
-            .setPopup(new maplibregl.Popup().setHTML('Your Location'))
+            .setPopup(userPopup)
             .addTo(map);
 
         // Add place markers
         markers.forEach((marker, index) => {
+            // Create popup but don't attach it yet
+            const popup = new maplibregl.Popup({ 
+                closeOnClick: false,
+                closeButton: true 
+            }).setHTML(marker.title);
+            
+            // Store the popup in our refs array
+            popupRefs.current.push(popup);
+
+            // Create marker without popup
             const markerElement = new maplibregl.Marker({ color: '#4CAF50' })
                 .setLngLat(marker.position)
-                .setPopup(new maplibregl.Popup().setHTML(marker.title))
                 .addTo(map);
 
+            // Add click listener to marker
             markerElement.getElement().addEventListener('click', () => {
+                // Close any open popup
+                if (activePopupIndex.current !== null && activePopupIndex.current !== index) {
+                    popupRefs.current[activePopupIndex.current].remove();
+                }
+                
+                // Set the new active popup
+                activePopupIndex.current = index;
+                
+                // Show the popup for this marker
+                popup.setLngLat(marker.position).addTo(map);
+                
+                // Call the callback
                 onMarkerClick(index);
+            });
+            
+            // Add close handler to the popup to reset active index when closed
+            popup.on('close', () => {
+                if (activePopupIndex.current === index) {
+                    activePopupIndex.current = null;
+                }
             });
         });
 
-        return () => map.remove();
+        return () => {
+            // Clean up all popups
+            popupRefs.current.forEach(popup => popup.remove());
+            map.remove();
+        };
     }, [center, markers, zoom, onMarkerClick]);
 
     return <div ref={mapContainer} className="map-container" />;
@@ -202,8 +307,11 @@ const App: React.FC = () => {
     const [places, setPlaces] = useState<Place[]>([]);
     const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
+    const [showLocationPermission, setShowLocationPermission] = useState(false);
+    const [permissionState, setPermissionState] = useState<PermissionState | null>(null);
+    const [isGPSEnabled, setIsGPSEnabled] = useState<boolean | null>(null);
     const watchId = useRef<number | null>(null);
 
     const fetchNearbyPlaces = async (longitude: number, latitude: number) => {
@@ -247,104 +355,249 @@ const App: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        // Function to handle successful location updates
-        const handleLocationSuccess = (position: GeolocationPosition) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            console.log('Location update received:', { latitude, longitude, accuracy });
-            setAccuracy(accuracy);
-
-            // Only update location if accuracy is good enough
-            if (accuracy <= MIN_ACCURACY_METERS) {
-                console.log('Good accuracy, updating location');
-                setUserLocation([longitude, latitude]);
-                setIsLoading(false);
-                fetchNearbyPlaces(longitude, latitude);
-            } else {
-                console.log('Poor accuracy, waiting for better reading');
-                // Don't set error yet, keep waiting for better accuracy
-            }
-        };
-
-        // Function to handle location errors
-        const handleLocationError = (err: GeolocationPositionError) => {
-            setIsLoading(false);
-            let errorMessage = "An unknown error occurred while getting your location.";
-            
-            switch(err.code) {
-                case err.PERMISSION_DENIED:
-                    errorMessage = "Please enable location services in your browser settings to use this app.";
-                    break;
-                case err.POSITION_UNAVAILABLE:
-                    errorMessage = "Unable to determine your location. Please check your device's GPS settings.";
-                    break;
-                case err.TIMEOUT:
-                    errorMessage = "Location request timed out. Please check your internet connection and GPS signal.";
-                    break;
-            }
-            
-            setLocationError(errorMessage);
-            console.error('Geolocation error:', err);
-        };
-
-        // Options for location watching
-        const options = {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        };
-
-        // Start watching position
-        if (navigator.geolocation) {
-            // Get initial position
-            navigator.geolocation.getCurrentPosition(handleLocationSuccess, handleLocationError, options);
-            
-            // Then start watching for updates
-            watchId.current = navigator.geolocation.watchPosition(
-                handleLocationSuccess,
-                handleLocationError,
-                options
-            );
-        } else {
-            setLocationError("Geolocation is not supported by your browser.");
-            setIsLoading(false);
+    // Function to check if GPS is enabled
+    const checkGPSStatus = async (position: GeolocationPosition | null = null): Promise<boolean> => {
+        if (position) {
+            // If we got a position, GPS must be enabled
+            setIsGPSEnabled(true);
+            return true;
         }
 
-        // Cleanup function
+        // Try to get a high-accuracy position with a short timeout
+        return new Promise<boolean>((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                () => {
+                    setIsGPSEnabled(true);
+                    resolve(true);
+                },
+                (error) => {
+                    // If error is TIMEOUT or POSITION_UNAVAILABLE, GPS might be disabled
+                    const isGPSDisabled = error.code === error.TIMEOUT || 
+                                        error.code === error.POSITION_UNAVAILABLE;
+                    setIsGPSEnabled(!isGPSDisabled);
+                    resolve(!isGPSDisabled);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 2000, // Short timeout to quickly detect GPS status
+                    maximumAge: 0
+                }
+            );
+        });
+    };
+
+    // Function to check location permission
+    const checkLocationPermission = async () => {
+        try {
+            const permission = await navigator.permissions.query({ name: 'geolocation' });
+            setPermissionState(permission.state);
+            
+            switch (permission.state) {
+                case 'granted':
+                    // Check GPS status before starting tracking
+                    const gpsEnabled = await checkGPSStatus();
+                    if (gpsEnabled) {
+                        startLocationTracking();
+                    } else {
+                        setLocationError(
+                            "GPS is disabled. To use this app:\n\n" +
+                            "1. Pull down from the top of your screen\n" +
+                            "2. Tap the Location/GPS icon to turn it on\n" +
+                            "3. Make sure it's set to 'High accuracy' mode\n" +
+                            "4. Tap 'Try Again' below"
+                        );
+                    }
+                    break;
+                case 'prompt':
+                    setShowLocationPermission(true);
+                    break;
+                case 'denied':
+                    setLocationError(
+                        "Location access is blocked. To enable:\n\n" +
+                        "1. Open your browser settings\n" +
+                        "2. Go to Site Settings > Location\n" +
+                        "3. Allow location access\n" +
+                        "4. Refresh this page"
+                    );
+                    break;
+            }
+
+            // Listen for permission changes
+            permission.addEventListener('change', async () => {
+                setPermissionState(permission.state);
+                if (permission.state === 'granted') {
+                    const gpsEnabled = await checkGPSStatus();
+                    if (gpsEnabled) {
+                        startLocationTracking();
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error checking permission:', error);
+            if (navigator.geolocation) {
+                setShowLocationPermission(true);
+            } else {
+                setLocationError("Geolocation is not supported by your browser.");
+            }
+        }
+    };
+
+    // Function to force location permission request
+    const requestLocationPermission = () => {
+        setIsLoading(true);
+        if (!navigator.geolocation) {
+            setLocationError("Geolocation is not supported by your browser.");
+            setIsLoading(false);
+            return;
+        }
+
+        // Request position once to trigger the permission prompt
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                // Successfully got location, start tracking
+                handleLocationSuccess(position);
+                setShowLocationPermission(false);
+                startLocationTracking();
+            },
+            (error) => {
+                handleLocationError(error);
+                // Only show permission screen if we need to prompt
+                setShowLocationPermission(permissionState === 'prompt');
+            },
+            { 
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        );
+    };
+
+    // Function to start location tracking
+    const startLocationTracking = () => {
+        setIsLoading(true);
+        setLocationError(null);
+
+        // Clear any existing watch
+        if (watchId.current !== null) {
+            navigator.geolocation.clearWatch(watchId.current);
+        }
+
+        watchId.current = navigator.geolocation.watchPosition(
+            handleLocationSuccess,
+            handleLocationError,
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    };
+
+    // Function to handle successful location updates
+    const handleLocationSuccess = (position: GeolocationPosition) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setAccuracy(accuracy);
+        setShowLocationPermission(false);
+        setUserLocation([longitude, latitude]);
+        setIsLoading(false);
+        fetchNearbyPlaces(longitude, latitude);
+    };
+
+    // Function to handle location errors
+    const handleLocationError = (err: GeolocationPositionError) => {
+        setIsLoading(false);
+        let errorMessage = "";
+        
+        switch(err.code) {
+            case err.PERMISSION_DENIED:
+                errorMessage = "Location access is blocked. To enable:\n\n" +
+                             "1. Tap the location icon (🌍) in your browser's address bar\n" +
+                             "2. Select 'Allow'\n" +
+                             "3. Refresh this page";
+                setPermissionState('denied');
+                break;
+            case err.POSITION_UNAVAILABLE:
+                errorMessage = "Cannot find your location. Please:\n\n" +
+                             "1. Pull down from the top of your screen\n" +
+                             "2. Turn on Location/GPS\n" +
+                             "3. Set it to 'High accuracy' mode\n" +
+                             "4. Check that you're not in airplane mode\n" +
+                             "5. Make sure you have a clear view of the sky";
+                setIsGPSEnabled(false);
+                break;
+            case err.TIMEOUT:
+                errorMessage = "Location request timed out. Please:\n\n" +
+                             "1. Check your internet connection\n" +
+                             "2. Make sure GPS is enabled and in 'High accuracy' mode\n" +
+                             "3. Move to an area with better GPS signal";
+                break;
+            default:
+                errorMessage = "An error occurred getting your location. Please check your device settings and try again.";
+        }
+        
+        setLocationError(errorMessage);
+    };
+
+    useEffect(() => {
+        // Check permission status first
+        checkLocationPermission();
+
         return () => {
             if (watchId.current !== null) {
                 navigator.geolocation.clearWatch(watchId.current);
             }
-            setUserLocation(null);
-            setPlaces([]);
-            setSelectedPlace(null);
         };
     }, []);
+
+    // Location permission request state
+    if (showLocationPermission || (locationError && permissionState !== 'denied')) {
+        return (
+            <div className="location-permission">
+                <h2>{isGPSEnabled === false ? 'GPS is Disabled' : 'Enable Location Access'}</h2>
+                {locationError ? (
+                    <>
+                        <p style={{ color: '#d32f2f', whiteSpace: 'pre-line' }}>{locationError}</p>
+                        <button 
+                            onClick={() => {
+                                setLocationError(null);
+                                checkLocationPermission();
+                            }}
+                            className="location-button"
+                            style={{ marginTop: '20px' }}
+                        >
+                            Try Again
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <p>To find tourist places near you:</p>
+                        <ol style={{ textAlign: 'left', marginBottom: '20px' }}>
+                            <li>Make sure GPS is enabled (pull down from top of screen)</li>
+                            <li>Tap the button below</li>
+                            <li>Allow location access when prompted</li>
+                            <li>Wait while we find places near you</li>
+                        </ol>
+                        <button 
+                            onClick={requestLocationPermission}
+                            className="location-button"
+                        >
+                            Find Places Near Me
+                        </button>
+                    </>
+                )}
+            </div>
+        );
+    }
 
     // Loading state
     if (isLoading) {
         return (
             <div className="loading">
                 <div className="loading-spinner"></div>
-                <p>Getting your location...</p>
+                <p>Finding places near you...</p>
                 {accuracy && (
-                    <p>Current accuracy: {accuracy.toFixed(1)} meters</p>
+                    <p>GPS Accuracy: {accuracy.toFixed(1)} meters</p>
                 )}
-            </div>
-        );
-    }
-
-    // Error state
-    if (locationError) {
-        return (
-            <div className="error-message">
-                <p>{locationError}</p>
-                <button 
-                    onClick={() => window.location.reload()} 
-                    className="retry-button"
-                >
-                    Try Again
-                </button>
             </div>
         );
     }
@@ -367,49 +620,52 @@ const App: React.FC = () => {
     }));
 
     return (
-        <div>
-            <h1>Nearby Tourist Places</h1>
-            {accuracy && (
-                <div className="accuracy-info">
-                    Location accuracy: {accuracy.toFixed(1)} meters
-                </div>
-            )}
-            <Map 
-                center={userLocation} 
-                markers={markers} 
-                zoom={14}  // Increased zoom level for better precision
-                onMarkerClick={(index) => setSelectedPlace(places[index])}
-            />
-            {selectedPlace && (
-                <div className="selected-place">
-                    <h2>{selectedPlace.name}</h2>
-                    <p>{selectedPlace.location.formatted}</p>
-                    {selectedPlace.description && <p>{selectedPlace.description}</p>}
-                    {selectedPlace.website && (
-                        <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer">
-                            Visit Website
-                        </a>
+        <>
+            <style>{styles}</style>
+            <div>
+                <h1>Nearby Tourist Places</h1>
+                {accuracy && (
+                    <div className="accuracy-info">
+                        Location accuracy: {accuracy.toFixed(1)} meters
+                    </div>
+                )}
+                <Map 
+                    center={userLocation} 
+                    markers={markers} 
+                    zoom={14}  // Increased zoom level for better precision
+                    onMarkerClick={(index) => setSelectedPlace(places[index])}
+                />
+                {selectedPlace && (
+                    <div className="selected-place">
+                        <h2>{selectedPlace.name}</h2>
+                        <p>{selectedPlace.location.formatted}</p>
+                        {selectedPlace.description && <p>{selectedPlace.description}</p>}
+                        {selectedPlace.website && (
+                            <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer">
+                                Visit Website
+                            </a>
+                        )}
+                    </div>
+                )}
+                <div className="place-list">
+                    {places.length === 0 ? (
+                        <p>No tourist places found nearby. Try moving to a different location.</p>
+                    ) : (
+                        places.map((place, index) => (
+                            <div 
+                                key={index} 
+                                className={`place-item ${selectedPlace?.name === place.name ? 'selected' : ''}`}
+                                onClick={() => setSelectedPlace(place)}
+                            >
+                                <h3>{place.name}</h3>
+                                <p>{place.location.formatted}</p>
+                                <p>Distance: {place.distance ? `${(place.distance / 1000).toFixed(1)} km` : 'N/A'}</p>
+                            </div>
+                        ))
                     )}
                 </div>
-            )}
-            <div className="place-list">
-                {places.length === 0 ? (
-                    <p>No tourist places found nearby. Try moving to a different location.</p>
-                ) : (
-                    places.map((place, index) => (
-                        <div 
-                            key={index} 
-                            className={`place-item ${selectedPlace?.name === place.name ? 'selected' : ''}`}
-                            onClick={() => setSelectedPlace(place)}
-                        >
-                            <h3>{place.name}</h3>
-                            <p>{place.location.formatted}</p>
-                            <p>Distance: {place.distance ? `${(place.distance / 1000).toFixed(1)} km` : 'N/A'}</p>
-                        </div>
-                    ))
-                )}
             </div>
-        </div>
+        </>
     );
 };
 
